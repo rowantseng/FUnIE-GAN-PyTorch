@@ -1,4 +1,5 @@
 import glob
+import json
 import random
 
 import numpy as np
@@ -29,15 +30,18 @@ def augment(dt_im, eh_im):
 
 
 class PairDataset(torch.utils.data.Dataset):
-    def __init__(self, data_root, im_size):
+    def __init__(self, data_root, im_size, split):
         super(PairDataset, self).__init__()
 
         self.data_root = data_root
         self.im_size = im_size
-        self.dt_ims = glob.glob(f"{self.data_root}/trainA/*")
-        self.eh_ims = glob.glob(f"{self.data_root}/trainB/*")
-        assert len(self.dt_ims) == len(self.eh_ims)
 
+        # Load JSON of splits
+        names = json.load(open(f"{self.data_root}/splits.json", "r"))[split]
+
+        # Build image paths
+        self.dt_ims = [f"{self.data_root}/trainA/{n}" for n in names]
+        self.eh_ims = [f"{self.data_root}/trainB/{n}" for n in names]
         print(f"Total {len(self.dt_ims)} data")
 
     def __getitem__(self, index):

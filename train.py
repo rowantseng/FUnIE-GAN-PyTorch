@@ -243,8 +243,8 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     # Build data loaders
-    train_set = PairDataset(args.data, (256, 256))
-    valid_set = PairDataset(args.data, (256, 256))
+    train_set = PairDataset(args.data, (256, 256), "train")
+    valid_set = PairDataset(args.data, (256, 256), "valid")
     train_loader = torch.utils.data.DataLoader(
         train_set, batch_size=args.batch_size, shuffle=True, num_workers=args.workers)
     valid_loader = torch.utils.data.DataLoader(
