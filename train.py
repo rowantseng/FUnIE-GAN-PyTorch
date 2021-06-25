@@ -1,32 +1,38 @@
 import argparse
 import os
 import time
+from shutil import copyfile
+
+import numpy as np
 
 import torch
 import torch.optim as optim
-from torchvision.utils import make_grid, save_image
-
-from datasets import PairDataset
+from datasets import PairDataset, denorm
 from models import FUnIEDiscriminator, FUnIEGeneratorV1, TotalGenLoss
+from torch.utils.tensorboard import SummaryWriter
+from torchvision.utils import make_grid, save_image
 from utils import AverageMeter, ProgressMeter
 
 
 class Trainer(object):
-    def __init__(self, train_loader, valid_loader, lr, epochs, resume, save_path):
+    def __init__(self, train_loader, valid_loader, lr, epochs, gen_resume, dis_resume, save_path, is_cuda):
 
         self.train_loader = train_loader
         self.valid_loader = valid_loader
         self.start_epoch = 0
         self.epochs = epochs
         self.save_path = save_path
-        self.print_freq = 20
+        os.makedirs(f"{self.save_path}/viz", exist_ok=True)
+        self.writer = SummaryWriter(log_dir=self.save_path)
 
-        self.is_cuda = torch.cuda.is_available()
+        self.is_cuda = is_cuda
+        self.print_freq = 20
+        self.best_gen_loss = 1e6
 
         self.gen = FUnIEGeneratorV1()
         self.dis = FUnIEDiscriminator()
-        if resume:
-            self.load(resume)
+        if gen_resume and dis_resume:
+            self.load(gen_resume, dis_resume)
 
         if self.is_cuda:
             self.gen.cuda()
@@ -43,9 +49,15 @@ class Trainer(object):
     def train(self):
         for e in range(self.start_epoch, self.epochs):
             self.epoch = e
-            self.train_epoch()
-            self.validate()
-            self.save()
+            train_gen_loss, train_dis_loss = self.train_epoch()
+            valid_gen_loss, valid_dis_loss = self.validate()
+
+            # Save models
+            is_best = valid_gen_loss < self.best_gen_loss
+            self.best_gen_loss = min(self.best_gen_loss, valid_gen_loss)
+            self.save(is_best)
+
+        self.writer.close()
 
     def train_epoch(self):
         self.gen.train()
@@ -109,6 +121,14 @@ class Trainer(object):
             if batch_idx % self.print_freq == 0:
                 progress.display(batch_idx)
 
+        # Write stats to tensorboard
+        self.writer.add_scalar("Generator Loss/Train",
+                               gen_losses.avg, self.epoch)
+        self.writer.add_scalar("Discriminator Loss/Train",
+                               dis_losses.avg, self.epoch)
+
+        return gen_losses.avg, dis_losses.avg
+
     def validate(self):
         self.gen.eval()
         self.dis.eval()
@@ -162,47 +182,79 @@ class Trainer(object):
                 end = time.time()
 
                 # Vis
-                save_image(make_grid(fake_images.data),
-                           f"{self.save_path}/generated_{self.epoch}.png")
-                save_image(make_grid(ehcd_images.data),
-                           f"{self.save_path}/enhanced_{self.epoch}.png")
-                save_image(make_grid(dstd_images.data),
-                           f"{self.save_path}/distorted_{self.epoch}.png")
+                if batch_idx == 0:
+                    fake_grid = denorm(make_grid(fake_images.data)).div_(255.)
+                    ehcd_grid = denorm(make_grid(ehcd_images.data)).div_(255.)
+                    dstd_grid = denorm(make_grid(dstd_images.data)).div_(255.)
+                    save_image(
+                        fake_grid, f"{self.save_path}/viz/fake_{self.epoch}.png")
+                    save_image(
+                        ehcd_grid, f"{self.save_path}/viz/ehcd_{self.epoch}.png")
+                    save_image(
+                        dstd_grid, f"{self.save_path}/viz/dstd_{self.epoch}.png")
+                    self.writer.add_image("Viz/Fake", fake_grid, self.epoch)
+                    self.writer.add_image("Viz/Enhance", ehcd_grid, self.epoch)
+                    self.writer.add_image("Viz/Distort", dstd_grid, self.epoch)
 
                 if batch_idx % self.print_freq == 0:
                     progress.display(batch_idx)
+
+        # Write stats to tensorboard
+        self.writer.add_scalar("Generator Loss/Validation",
+                               gen_losses.avg, self.epoch)
+        self.writer.add_scalar("Discriminator Loss/Validation",
+                               dis_losses.avg, self.epoch)
+
+        return gen_losses.avg, dis_losses.avg
 
     def predict(self, image_tensors):
         self.gen.eval()
         return self.gen(image_tensors)
 
-    def save(self):
-        os.makedirs(self.save_path, exist_ok=True)
-        model_path = f"{self.save_path}/{self.epoch}_gen.pth.tar"
+    def save(self, is_best):
+        gen_path = f"{self.save_path}/{self.epoch}_gen.pth.tar"
         torch.save({"state_dict": self.gen.state_dict(),
-                    "epoch": self.epoch}, model_path)
-        print(f">>> Save generator to {model_path}")
+                    "best_loss": self.best_gen_loss,
+                    "epoch": self.epoch}, gen_path)
+        print(f">>> Save generator to {gen_path}")
 
-        model_path = f"{self.save_path}/{self.epoch}_dis.pth.tar"
+        dis_path = f"{self.save_path}/{self.epoch}_dis.pth.tar"
         torch.save({"state_dict": self.dis.state_dict(),
-                    "epoch": self.epoch}, model_path)
-        print(f">>> Save discriminator to {model_path}")
+                    "epoch": self.epoch}, dis_path)
+        print(f">>> Save discriminator to {dis_path}")
 
-    def load(self, resume):
+        if is_best:
+            copyfile(gen_path, f"{self.save_path}/best_gen.pth.tar")
+            copyfile(dis_path, f"{self.save_path}/best_dis.pth.tar")
+
+    def load(self, gen_resume, dis_resume):
         if self.is_cuda:
-            ckpt = torch.load(resume)
+            gen_ckpt = torch.load(gen_resume)
+            dis_ckpt = torch.load(dis_resume)
         else:
-            ckpt = torch.load(resume, map_location="cpu")
+            gen_ckpt = torch.load(gen_resume, map_location="cpu")
+            dis_ckpt = torch.load(dis_resume, map_location="cpu")
 
-        self.model.load_state_dict(ckpt["state_dict"])
-        self.start_epoch = ckpt["epoch"]
-        self.epoch = ckpt["epoch"]
+        assert gen_ckpt["epoch"] == dis_ckpt["epoch"]
+        self.gen.load_state_dict(gen_ckpt["state_dict"])
+        self.dis.load_state_dict(dis_ckpt["state_dict"])
+        self.best_gen_loss = gen_ckpt["best_loss"]
+        self.start_epoch = gen_ckpt["epoch"] + 1
 
-        print(f">>> Load model from {resume} at epoch={self.epoch}")
-        return
+        print(
+            f">>> Load generator from {gen_resume} at epoch={gen_ckpt['epoch']}")
+        print(
+            f">>> Load discriminator from {dis_resume} at epoch={gen_ckpt['epoch']}")
 
 
 if __name__ == "__main__":
+
+    # Set seed
+    np.random.seed(77)
+    torch.manual_seed(77)
+    is_cuda = torch.cuda.is_available()
+    if is_cuda:
+        torch.cuda.manual_seed(77)
 
     model_names = ["v1", "v2"]
 
@@ -233,8 +285,10 @@ if __name__ == "__main__":
                         metavar="W", help="weight decay (default: 1e-4)")
     parser.add_argument("-p", "--print-freq", default=10, type=int,
                         metavar="N", help="print frequency (default: 10)")
-    parser.add_argument("--resume", default="", type=str, metavar="PATH",
-                        help="path to latest checkpoint (default: none)")
+    parser.add_argument("--gen-resume", default="", type=str, metavar="PATH",
+                        help="path to latest generator checkpoint (default: none)")
+    parser.add_argument("--dis-resume", default="", type=str, metavar="PATH",
+                        help="path to latest discriminator checkpoint (default: none)")
     parser.add_argument("--save-path", default="", type=str, metavar="PATH",
                         help="path to save results (default: none)")
     parser.add_argument("-e", "--evaluate", action="store_true",
@@ -251,8 +305,8 @@ if __name__ == "__main__":
         valid_set, batch_size=args.batch_size, shuffle=False, num_workers=args.workers)
 
     # Create trainer
-    trainer = Trainer(train_loader, valid_loader, args.lr,
-                      args.epochs, args.resume, args.save_path)
+    trainer = Trainer(train_loader, valid_loader, args.lr, args.epochs,
+                      args.gen_resume, args.dis_resume, args.save_path, is_cuda)
 
     # Train or evaluate
     if args.evaluate:

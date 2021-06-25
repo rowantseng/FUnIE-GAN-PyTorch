@@ -10,6 +10,8 @@ from PIL import Image
 def norm(image):
     return (image / 127.5) - 1.0
 
+def denorm(image):
+    return (image + 1.0) * 127.5
 
 def augment(dt_im, eh_im):
     # Random interpolation
@@ -35,9 +37,10 @@ class PairDataset(torch.utils.data.Dataset):
 
         self.data_root = data_root
         self.im_size = im_size
+        self.split = split
 
         # Load JSON of splits
-        names = json.load(open(f"{self.data_root}/splits.json", "r"))[split]
+        names = json.load(open(f"{self.data_root}/splits.json", "r"))[self.split]
 
         # Build image paths
         self.dt_ims = [f"{self.data_root}/trainA/{n}" for n in names]
@@ -56,7 +59,8 @@ class PairDataset(torch.utils.data.Dataset):
         eh_im = np.array(eh_im, dtype=np.float32)
 
         # Augment image pair
-        dt_im, eh_im = augment(dt_im, eh_im)
+        if self.split == "train":
+            dt_im, eh_im = augment(dt_im, eh_im)
 
         # Transfrom image pair to (C, H, W) torch.Tensor
         dt_im = torch.Tensor(norm(dt_im)).permute(2, 0, 1)
