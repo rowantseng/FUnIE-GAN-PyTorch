@@ -8,14 +8,14 @@ import numpy as np
 import torch
 import torch.optim as optim
 from datasets import PairDataset, denorm
-from models import FUnIEDiscriminator, FUnIEGeneratorV1, TotalGenLoss
+from models import FUnIEDiscriminator, FUnIEGeneratorV1, FUnIEGeneratorV2, TotalGenLoss
 from torch.utils.tensorboard import SummaryWriter
 from torchvision.utils import make_grid, save_image
 from utils import AverageMeter, ProgressMeter
 
 
 class Trainer(object):
-    def __init__(self, train_loader, valid_loader, lr, epochs, gen_resume, dis_resume, save_path, is_cuda):
+    def __init__(self, arch, train_loader, valid_loader, lr, epochs, gen_resume, dis_resume, save_path, is_cuda):
 
         self.train_loader = train_loader
         self.valid_loader = valid_loader
@@ -29,7 +29,7 @@ class Trainer(object):
         self.print_freq = 20
         self.best_gen_loss = 1e6
 
-        self.gen = FUnIEGeneratorV1()
+        self.gen = {"v1": FUnIEGeneratorV1, "v2": FUnIEGeneratorV2}[arch]()
         self.dis = FUnIEDiscriminator()
         if gen_resume and dis_resume:
             self.load(gen_resume, dis_resume)
@@ -207,10 +207,6 @@ class Trainer(object):
 
         return gen_losses.avg, dis_losses.avg
 
-    def predict(self, image_tensors):
-        self.gen.eval()
-        return self.gen(image_tensors)
-
     def save(self, is_best):
         gen_path = f"{self.save_path}/{self.epoch}_gen.pth.tar"
         torch.save({"state_dict": self.gen.state_dict(),
@@ -270,8 +266,6 @@ if __name__ == "__main__":
                         help="number of data loading workers (default: 4)")
     parser.add_argument("--epochs", default=90, type=int, metavar="N",
                         help="number of total epochs to run")
-    parser.add_argument("--start-epoch", default=0, type=int, metavar="N",
-                        help="manual epoch number (useful on restarts)")
     parser.add_argument("-b", "--batch-size", default=256, type=int,
                         metavar="N",
                         help="mini-batch size (default: 256), this is the total "
@@ -279,20 +273,12 @@ if __name__ == "__main__":
                         "using Data Parallel or Distributed Data Parallel")
     parser.add_argument("--lr", "--learning-rate", default=0.1, type=float,
                         metavar="LR", help="initial learning rate")
-    parser.add_argument("--momentum", default=0.9, type=float, metavar="M",
-                        help="momentum")
-    parser.add_argument("--wd", "--weight-decay", default=1e-4, type=float,
-                        metavar="W", help="weight decay (default: 1e-4)")
-    parser.add_argument("-p", "--print-freq", default=10, type=int,
-                        metavar="N", help="print frequency (default: 10)")
     parser.add_argument("--gen-resume", default="", type=str, metavar="PATH",
                         help="path to latest generator checkpoint (default: none)")
     parser.add_argument("--dis-resume", default="", type=str, metavar="PATH",
                         help="path to latest discriminator checkpoint (default: none)")
     parser.add_argument("--save-path", default="", type=str, metavar="PATH",
                         help="path to save results (default: none)")
-    parser.add_argument("-e", "--evaluate", action="store_true",
-                        help="evaluate model on validation set")
 
     args = parser.parse_args()
 
@@ -305,11 +291,6 @@ if __name__ == "__main__":
         valid_set, batch_size=args.batch_size, shuffle=False, num_workers=args.workers)
 
     # Create trainer
-    trainer = Trainer(train_loader, valid_loader, args.lr, args.epochs,
+    trainer = Trainer(args.arch, train_loader, valid_loader, args.lr, args.epochs,
                       args.gen_resume, args.dis_resume, args.save_path, is_cuda)
-
-    # Train or evaluate
-    if args.evaluate:
-        trainer.validate()
-    else:
-        trainer.train()
+    trainer.train()

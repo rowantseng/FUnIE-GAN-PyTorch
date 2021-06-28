@@ -81,7 +81,8 @@ class TestDataset(torch.utils.data.Dataset):
 
     def __getitem__(self, index):
         # Read and resize image
-        im = Image.open(self.ims[index]).convert("RGB")
+        path = self.ims[index]
+        im = Image.open(path).convert("RGB")
         im = im.resize(self.im_size)
 
         # Transfrom image to float32 np.ndarray
@@ -89,7 +90,7 @@ class TestDataset(torch.utils.data.Dataset):
 
         # Transfrom image to (C, H, W) torch.Tensor
         im = torch.Tensor(norm(im)).permute(2, 0, 1)
-        return im
+        return path, im
 
     def __len__(self):
         return len(self.ims)

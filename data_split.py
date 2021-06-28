@@ -17,8 +17,8 @@ if __name__ == "__main__":
     np.random.seed(seed)
 
     # Load images and make sure distorted and enhanced images have same order
-    dt_images = list(glob.glob(f"{args.data}/trainA/*.jpg"))
-    eh_images = list(glob.glob(f"{args.data}/trainB/*.jpg"))
+    dt_images = list(glob.glob(f"{args.data}/trainA/*.*"))
+    eh_images = list(glob.glob(f"{args.data}/trainB/*.*"))
     base_names = list(map(os.path.basename, dt_images))
     assert base_names == list(map(os.path.basename, eh_images))
 
