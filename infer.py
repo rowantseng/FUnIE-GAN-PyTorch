@@ -1,24 +1,18 @@
-import os
-from datasets import TestDataset
-
 import argparse
 import os
 import time
-from shutil import copyfile
 
 import numpy as np
 
 import torch
-import torch.optim as optim
 from datasets import TestDataset, denorm
-from models import FUnIEDiscriminator, FUnIEGeneratorV1, TotalGenLoss
-from torch.utils.tensorboard import SummaryWriter
-from torchvision.utils import make_grid, save_image
-from utils import AverageMeter, ProgressMeter
+from models import FUnIEGeneratorV1, FUnIEGeneratorV2, FUnIEUpGenerator
 from torchvision import transforms
+from utils import AverageMeter, ProgressMeter
+
 
 class Predictor(object):
-    def __init__(self, test_loader, gen_model, save_path, is_cuda):
+    def __init__(self, model, test_loader, model_path, save_path, is_cuda):
 
         self.test_loader = test_loader
         self.save_path = save_path
@@ -27,18 +21,20 @@ class Predictor(object):
         self.is_cuda = is_cuda
         self.print_freq = 20
 
-        self.gen = FUnIEGeneratorV1()
-        if gen_model:
-            self.load(gen_model)
-
+        # Load model weights
+        self.model = model
+        if not os.path.isfile(model_path):
+            raise FileNotFoundError(f"Model file '{model_path}' not found!")
+        self.load(model_path)
         if self.is_cuda:
-            self.gen.cuda()
+            self.model.cuda()
 
     def predict(self):
-        self.gen.eval()
+        self.model.eval()
 
         batch_time = AverageMeter("Time", "3.3f")
-        progress = ProgressMeter(len(self.test_loader), [batch_time], prefix="Test: ")
+        progress = ProgressMeter(len(self.test_loader), [
+                                 batch_time], prefix="Test: ")
 
         with torch.no_grad():
             end = time.time()
@@ -46,8 +42,8 @@ class Predictor(object):
                 bs = images.size(0)
                 if self.is_cuda:
                     images = images.cuda()
-                fake_images = self.gen(images)
-                
+                fake_images = self.model(images)
+
                 fake_images = denorm(fake_images.data)
                 fake_images = torch.clamp(fake_images, min=0., max=255.)
                 fake_images = fake_images.type(torch.uint8)
@@ -65,18 +61,12 @@ class Predictor(object):
                     progress.display(batch_idx)
         return
 
-    def load(self, gen_model):
-        if self.is_cuda:
-            gen_ckpt = torch.load(gen_model)
-        else:
-            gen_ckpt = torch.load(gen_model, map_location="cpu")
-
-        self.gen.load_state_dict(gen_ckpt["state_dict"])
-        self.best_gen_loss = gen_ckpt["best_loss"]
-        self.start_epoch = gen_ckpt["epoch"] + 1
-
-        print(
-            f">>> Load generator from {gen_model} at epoch={gen_ckpt['epoch']}")
+    def load(self, model):
+        device = "cuda:0" if self.is_cuda else "cpu"
+        ckpt = torch.load(model, map_location=device)
+        self.model.load_state_dict(ckpt["state_dict"])
+        print(f"At epoch: {ckpt['epoch']} (loss={ckpt['best_loss']:.3f})")
+        print(f">>> Load generator from {model}")
 
 
 if __name__ == "__main__":
@@ -88,7 +78,9 @@ if __name__ == "__main__":
     if is_cuda:
         torch.cuda.manual_seed(77)
 
-    model_names = ["v1", "v2"]
+    model_names = ["v1", "v2", "unpair"]
+    model_archs = [FUnIEGeneratorV1, FUnIEGeneratorV2, FUnIEUpGenerator]
+    model_mapper = {m: net for m, net in zip(model_names, model_archs)}
 
     parser = argparse.ArgumentParser(description="PyTorch FUnIE-GAN Inference")
     parser.add_argument("-d", "--data", default="", type=str, metavar="PATH",
@@ -105,10 +97,8 @@ if __name__ == "__main__":
                         help="mini-batch size (default: 256), this is the total "
                         "batch size of all GPUs on the current node when "
                         "using Data Parallel or Distributed Data Parallel")
-    parser.add_argument("-p", "--print-freq", default=10, type=int,
-                        metavar="N", help="print frequency (default: 10)")
-    parser.add_argument("--gen-model", default="", type=str, metavar="PATH",
-                        help="path to latest generator checkpoint (default: none)")
+    parser.add_argument("-m", "--model", default="", type=str, metavar="PATH",
+                        help="path to generator checkpoint (default: none)")
     parser.add_argument("--save-path", default="", type=str, metavar="PATH",
                         help="path to save results (default: none)")
 
@@ -120,5 +110,7 @@ if __name__ == "__main__":
         test_set, batch_size=args.batch_size, shuffle=False, num_workers=args.workers)
 
     # Create predictor
-    predictor = Predictor(test_loader, args.gen_model, args.save_path, is_cuda)
+    net = model_mapper[args.arch]()
+    predictor = Predictor(net, test_loader, args.model,
+                          args.save_path, is_cuda)
     predictor.predict()

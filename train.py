@@ -49,13 +49,11 @@ class Trainer(object):
     def train(self):
         for e in range(self.start_epoch, self.epochs):
             self.epoch = e
-            train_gen_loss, train_dis_loss = self.train_epoch()
-            valid_gen_loss, valid_dis_loss = self.validate()
+            _, _ = self.train_epoch()
+            valid_gen_loss, _ = self.validate()
 
             # Save models
-            is_best = valid_gen_loss < self.best_gen_loss
-            self.best_gen_loss = min(self.best_gen_loss, valid_gen_loss)
-            self.save(is_best)
+            self.save(valid_gen_loss)
 
         self.writer.close()
 
@@ -152,7 +150,7 @@ class Trainer(object):
                     fake = fake.cuda()
 
                 # -----
-                # Train the discriminator
+                # Validate the discriminator
                 # -----
                 fake_images = self.gen(dstd_images)
 
@@ -165,9 +163,8 @@ class Trainer(object):
                 d_loss = (real_d_loss + fake_d_loss) / 2
 
                 # -----
-                # Train the generator
+                # Validate the generator
                 # -----
-                fake_images = self.gen(dstd_images)
                 g_loss = self.dis_criterion(fake_images, ehcd_images)
 
                 # Total loss
@@ -207,16 +204,22 @@ class Trainer(object):
 
         return gen_losses.avg, dis_losses.avg
 
-    def save(self, is_best):
-        gen_path = f"{self.save_path}/{self.epoch}_gen.pth.tar"
-        torch.save({"state_dict": self.gen.state_dict(),
-                    "best_loss": self.best_gen_loss,
-                    "epoch": self.epoch}, gen_path)
-        print(f">>> Save generator to {gen_path}")
+    def save(self, loss):
+        # Check if the current model is the best
+        is_best = loss < self.best_gen_loss
+        self.best_gen_loss = min(self.best_gen_loss, loss)
 
+        # Prepare model info to be saved
+        model_content = {"best_loss": loss, "epoch": self.epoch}
+        gen_path = f"{self.save_path}/{self.epoch}_gen.pth.tar"
         dis_path = f"{self.save_path}/{self.epoch}_dis.pth.tar"
-        torch.save({"state_dict": self.dis.state_dict(),
-                    "epoch": self.epoch}, dis_path)
+
+        # Save generator and discriminator
+        model_content["state_dict"] = self.gen.state_dict()
+        torch.save(model_content, gen_path)
+        print(f">>> Save generator to {gen_path}")
+        model_content["state_dict"] = self.dis.state_dict()
+        torch.save(model_content, dis_path)
         print(f">>> Save discriminator to {dis_path}")
 
         if is_best:
@@ -224,23 +227,20 @@ class Trainer(object):
             copyfile(dis_path, f"{self.save_path}/best_dis.pth.tar")
 
     def load(self, gen_resume, dis_resume):
-        if self.is_cuda:
-            gen_ckpt = torch.load(gen_resume)
-            dis_ckpt = torch.load(dis_resume)
-        else:
-            gen_ckpt = torch.load(gen_resume, map_location="cpu")
-            dis_ckpt = torch.load(dis_resume, map_location="cpu")
+        device = "cuda:0" if self.is_cuda else "cpu"
+        gen_ckpt = torch.load(gen_resume, map_location=device)
+        dis_ckpt = torch.load(dis_resume, map_location=device)
 
         assert gen_ckpt["epoch"] == dis_ckpt["epoch"]
         self.gen.load_state_dict(gen_ckpt["state_dict"])
         self.dis.load_state_dict(dis_ckpt["state_dict"])
         self.best_gen_loss = gen_ckpt["best_loss"]
-        self.start_epoch = gen_ckpt["epoch"] + 1
+        self.start_epoch = gen_ckpt["epoch"]
 
-        print(
-            f">>> Load generator from {gen_resume} at epoch={gen_ckpt['epoch']}")
-        print(
-            f">>> Load discriminator from {dis_resume} at epoch={gen_ckpt['epoch']}")
+        print(f"At epoch: {self.start_epoch}")
+        print(f">>> Load generator from {gen_resume}")
+        print(f">>> Load discriminator from {dis_resume}")
+        self.start_epoch += 1
 
 
 if __name__ == "__main__":

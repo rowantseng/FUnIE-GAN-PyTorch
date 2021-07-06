@@ -58,8 +58,10 @@ def _mu_alpha_trim(x: np.ndarray, alpha_low: float = 0.1, alpha_high: float = 0.
     num = len(x)
     low = math.ceil(alpha_low * num)
     high = math.floor(alpha_high * num)
-    # Author: mu = sum(x) / (len(x) + 1)
     x = x[low+1:num-high]
+    # Author of the paper: mu = sum(x) / (len(x) + 1)
+    # https://github.com/xahidbuffon/FUnIE-GAN/blob/master/Evaluation/uqim_utils.py#L22
+    # In this work, mu = sum(x) / len(x)
     return x.mean()
 
 
