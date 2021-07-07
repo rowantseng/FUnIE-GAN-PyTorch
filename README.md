@@ -2,6 +2,15 @@
 
 PyTorch implementations of the [paper](https://arxiv.org/pdf/1903.09766.pdf).
 
+## Tasks
+
+- [x] Data preprocessing
+- [x] FUnIE-GAN-V1 architecture trained using paired data
+- [ ] FUnIE-GAN-V2 architecture trained using paired data
+- [x] FUnIE-GAN-UP architecture trained using unpaired data
+- [x] Official evaluation
+- [x] Provide model weights
+
 ## Data Preprocessing
 
 Please refer to [here](https://github.com/rowantseng/FUnIE-GAN-PyTorch/tree/master/preprocess) to prepare the paired and unpaired dataset.
@@ -80,20 +89,28 @@ python infer.py \
 -b 16 -j 8
 ```
 
-The metrics are calculated using the official evaluation. Please refer to [here]().
+The metrics are calculated using the official evaluation. Please refer to [here](https://github.com/rowantseng/FUnIE-GAN-PyTorch/tree/master/evaluation).
 
 ```shell
 cd evaluation
 
 # Run UIQM measurement
 python measure_uiqm.py \
---data /path/to/EUVP/generated/images
+--data "/path/to/EUVP/generated/images"
 
 # Run SSIM and PSNR measurement
 python measure_ssim_psnr.py \
---image-data /path/to/EUVP/generated/images \
---label-data /path/to/EUVP/test_samples/GTr
+--image-data "/path/to/EUVP/generated/images" \
+--label-data "/path/to/EUVP/test_samples/GTr"
 ```
+
+## Visualization
+
+The visualization is represented in the [slide](https://docs.google.com/presentation/d/1pqlNFPTQu6y_MTapsG_b8kRQIPAu_F0-gAYV7qvo078/edit?usp=sharing). 
+
+![result](images/result.png)
+
+As above, the result is trained on paired dataset `underwater_imagenet` using `FUnIE-GAN-V2` architecture.
 
 ## Citing FUnIE-GAN
 

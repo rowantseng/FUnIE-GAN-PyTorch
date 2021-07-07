@@ -29,7 +29,7 @@ if __name__ == "__main__":
 
     parser = argparse.ArgumentParser(
         description="PyTorch FUnIE-GAN UIQM Metric Runner")
-    parser.add_argument("--data", default="", type=str, metavar="PATH",
+    parser.add_argument("-d", "--data", default="", type=str, metavar="PATH",
                         help="path to images (default: none)")
 
     args = parser.parse_args()
