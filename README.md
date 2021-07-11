@@ -6,10 +6,16 @@ PyTorch implementations of the [paper](https://arxiv.org/pdf/1903.09766.pdf).
 
 - [x] Data preprocessing
 - [x] FUnIE-GAN-V1 architecture trained using paired data
-- [ ] FUnIE-GAN-V2 architecture trained using paired data
+- [x] FUnIE-GAN-V2 architecture trained using paired data
 - [x] FUnIE-GAN-UP architecture trained using unpaired data
 - [x] Official evaluation
 - [x] Provide model weights
+
+## Installation
+
+```shell
+pip install --no-cache-dir -r requirements.txt
+```
 
 ## Data Preprocessing
 
@@ -110,7 +116,7 @@ The visualization is represented in the [slide](https://docs.google.com/presenta
 
 ![result](images/result.png)
 
-As above, the result is trained on paired dataset `underwater_imagenet` using `FUnIE-GAN-V2` architecture.
+As above, the result is trained on paired dataset `underwater_scenes` using `FUnIE-GAN-V2` architecture, which has the best performance of SSIM, PSNR, and UIQM(see [evaluation](https://github.com/rowantseng/FUnIE-GAN-PyTorch/tree/master/evaluation)).
 
 ## Citing FUnIE-GAN
 

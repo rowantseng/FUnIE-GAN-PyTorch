@@ -3,32 +3,12 @@ import torch
 import torchvision.models as models
 
 
-class PerceptualLoss(nn.Module):
-    def __init__(self):
-        super(PerceptualLoss, self).__init__()
-
-    def forward(self, targets, outputs):
-        """Calculate perceptual distance: weighted euclidean distance function, 
-           where the weights depend on how big the "red" channel is
-           https://github.com/wandb/superres
-        """
-        targets = (targets + 1.0) * 127.5  # [-1,1] -> [0, 255]
-        outputs = (outputs + 1.0) * 127.5  # [-1,1] -> [0, 255]
-        rmean = (targets[..., 0] + outputs[..., 0]) / 2
-        r = targets[..., 0] - outputs[..., 0]
-        g = targets[..., 1] - outputs[..., 1]
-        b = targets[..., 2] - outputs[..., 2]
-        return torch.sqrt((((512 + rmean) * r * r) / 256) + 4 * g * g + (((767 - rmean) * b * b) / 256))
-
-
 class TotalGenLoss(nn.Module):
-    def __init__(self, is_cuda, gen_version="v1"):
+    def __init__(self, is_cuda):
         super(TotalGenLoss, self).__init__()
         self.vgg = VGGContent()
         if is_cuda:
             self.vgg = self.vgg.cuda()
-        self.compute_perceptual_loss = PerceptualLoss()
-        self.gen_version = gen_version
 
     def forward(self, org_image, gen_image):
         vgg_org_image = self.vgg(org_image)
@@ -37,13 +17,7 @@ class TotalGenLoss(nn.Module):
         bs = org_image.size(0)
         content_loss = ((vgg_org_image - vgg_gen_image) ** 2).mean(1)
         mae_gen_loss = (torch.abs(org_image - gen_image)).view(bs, -1).mean(1)
-        perceptual_loss = self.compute_perceptual_loss(
-            org_image, gen_image).view(bs, -1).mean(1)
-
-        if self.gen_version == "v1":
-            return (0.7 * mae_gen_loss + 0.3 * content_loss).mean()
-        else:
-            return (0.6 * mae_gen_loss + 0.3 * content_loss + 0.1 * perceptual_loss).mean()
+        return (0.7 * mae_gen_loss + 0.3 * content_loss).mean()
 
 
 class VGGContent(nn.Module):

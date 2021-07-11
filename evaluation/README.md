@@ -22,8 +22,8 @@ The only retouch is in `uqim_utils.py` line 64, 65, 153, and 154. Add `int` to t
 |                     | PSNR          | SSIM         | UIQM         | Model Weights |
 |---------------------|---------------|--------------|--------------|---------------|
 | Underwater Imagenet | 27.241(3.121) | 0.802(0.072) | 3.056(0.454) | [link](https://drive.google.com/file/d/105F5VUHVlqToML1kkgJkLq0q7AKwp1kx/view?usp=sharing) |
-| Underwater Dark     |  |  |  |  |
-| Underwater Scenes   |  |  |  |  |
+| Underwater Dark     | 26.746(3.629) | 0.787(0.068) | 2.934(0.445) | [link](https://drive.google.com/file/d/10GzWP30d_VSvUedw7S1IIgTfsUnNEMci/view?usp=sharing) |
+| Underwater Scenes   | 28.056(3.119) | 0.824(0.066) | 3.056(0.453) | [link](https://drive.google.com/file/d/10KlmEbRMNLjme1ZMi5tOW04k_nr_EBBJ/view?usp=sharing) |
 
 ## Unpaired Model: FUnIE-GAN-UP
 
