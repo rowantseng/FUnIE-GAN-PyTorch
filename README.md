@@ -114,7 +114,7 @@ python measure_ssim_psnr.py \
 
 The visualization is represented in the [slide](https://docs.google.com/presentation/d/1pqlNFPTQu6y_MTapsG_b8kRQIPAu_F0-gAYV7qvo078/edit?usp=sharing). 
 
-![result](images/result.png)
+![result](images/result.png#2)
 
 As above, the result is trained on paired dataset `underwater_scenes` using `FUnIE-GAN-V2` architecture, which has the best performance of SSIM, PSNR, and UIQM(see [evaluation](https://github.com/rowantseng/FUnIE-GAN-PyTorch/tree/master/evaluation)).
 
